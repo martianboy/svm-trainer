@@ -35,9 +35,18 @@ int main(int argc, const char * argv[]) {
 }
 
 void train_model() {
-    struct svm_problem* problem = read_problem("/Users/abbas/Downloads/XNOR.txt");
+    struct svm_problem *problem = read_problem("/Users/abbas/Downloads/XNOR.txt");
+    struct svm_parameter *params = create_training_param();
+    struct svm_model *model;
+    
+    if (svm_check_parameter(problem, params) == NULL) {
+        model = svm_train(problem, params);
+        
+        svm_free_and_destroy_model(&model);
+    }
 
     free_problem(problem);
+    free(params);
 }
 
 svm_parameter* create_training_param() {
