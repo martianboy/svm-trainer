@@ -61,11 +61,12 @@ struct svm_problem* read_problem(const char *path) {
     }
     
     ifs.seekg(0, ifs.end);
-    long length = 1L + ifs.tellg();
+    long length = 1L + ifs.tellg();     // Add one for ending zero-byte
     cout << "File length: " << length << endl;
 
     ifs.seekg(0, ifs.beg);
 
+    // Read the whole dataset into buf
     char *buf = new char[length];
     ifs.read(buf, length);
     printf("Last character: %d\n", buf[length - 1]);
@@ -84,9 +85,11 @@ struct svm_problem* read_problem(const char *path) {
         if (*c == ' ')
             continue;
 
-        if (*c == '1' && field_index < record_length) {
+        if (*c == '1' && field_index < record_length - 1) {
             record_values[sparse_value_index].index = field_index;
-            record_values[sparse_value_index++].value = 1;
+            cout << sparse_value_index << ": Adding sparse value 1 at index " << record_values[sparse_value_index].index << endl;
+            record_values[sparse_value_index].value = 1;
+            sparse_value_index++;
         }
 
         if (*c == '1' || *c == '0') {
@@ -97,8 +100,13 @@ struct svm_problem* read_problem(const char *path) {
         
         if (*c == '\n' || *c == 0) {
             field_index = 0;
-            record_values[sparse_value_index++].index = -1;
-            problem->x[++record_index] = &record_values[sparse_value_index];
+            record_values[sparse_value_index].value = 0;
+            record_values[sparse_value_index].index = -1;
+            cout << sparse_value_index << ": Adding sparse value 0 at index " << record_values[sparse_value_index].index << endl;
+            sparse_value_index++;
+            
+            if (++record_index < record_count)
+                problem->x[record_index] = &record_values[sparse_value_index];
         }
         
         if (*c == 0)
@@ -131,6 +139,7 @@ struct svm_problem* read_problem(const char *path) {
     return problem;
 }
 
+// Gets count of all non-zero input values (skips class value)
 int get_sparse_length(char *buf, int record_length) {
     int length = 0;
     int field_index = 0;
@@ -155,6 +164,7 @@ int get_sparse_length(char *buf, int record_length) {
     return length;
 }
 
+// Gets length of an input vector in dense mode (i.e. including zeros)
 int get_record_length(char *raw_ds) {
     int length = 0;
     
@@ -166,6 +176,7 @@ int get_record_length(char *raw_ds) {
     return length;
 }
 
+// Allocates memory for a new svm_problem structure
 svm_problem* create_problem(int record_count) {
     struct svm_problem *problem = (struct svm_problem*) malloc(sizeof(svm_problem));
 
@@ -176,6 +187,7 @@ svm_problem* create_problem(int record_count) {
     return problem;
 }
 
+// Frees allocated memory for a svm_problem
 void free_problem(svm_problem *problem) {
     free(problem->y);
 //    free(problem->x[0]);
