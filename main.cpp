@@ -34,14 +34,68 @@ int main(int argc, const char * argv[]) {
     return 0;
 }
 
+svm_node* sparsify(initializer_list<double> dense_arr) {
+    int sparse_length = 0;
+    
+    for (double value : dense_arr)
+        if (value != 0)
+            sparse_length++;
+    
+    int i = 0, sparse_i = 0;
+    struct svm_node *sparse_arr = new struct svm_node[sparse_length + 1];
+    sparse_arr[sparse_length].index = -1;
+    
+    for (double value : dense_arr) {
+        if (value != 0) {
+            sparse_arr[sparse_i].value = value;
+            sparse_arr[sparse_i++].index = i;
+        }
+        ++i;
+    }
+    
+    return sparse_arr;
+}
+
+ostream& operator <<(ostream& stream, svm_node* sparse_arr) {
+    int last_index = 0;
+    for (int sparse_i = 0; sparse_arr[sparse_i].index != -1; sparse_i++) {
+        for (int j = last_index; j < sparse_arr[sparse_i].index; j++)
+            stream << "0 ";
+        last_index = sparse_arr[sparse_i + 1].index;
+        stream << sparse_arr[sparse_i].value << " ";
+    }
+    
+    return stream;
+}
+
+void test_vector(svm_model *model, initializer_list<double> dense_arr) {
+    struct svm_node *test_vector;
+    test_vector = sparsify(dense_arr);
+    cout << test_vector << " -> " << svm_predict(model, test_vector) << "\n";
+    free(test_vector);
+}
+
 void train_model() {
-    struct svm_problem *problem = read_problem("/Users/abbas/Downloads/XNOR.txt");
+    struct svm_problem *problem = read_problem("/Users/abbas/Downloads/AND.txt");
     struct svm_parameter *params = create_training_param();
     struct svm_model *model;
     
-    if (svm_check_parameter(problem, params) == NULL) {
+    const char *param_check_value = svm_check_parameter(problem, params);
+    
+    if (param_check_value != NULL)
+        cout << "Check params result: " << param_check_value << endl;
+        
+    
+    if (param_check_value == NULL) {
         model = svm_train(problem, params);
         
+        cout << "\nPredicted values:\n";
+        
+        test_vector(model, {-1, -1});
+        test_vector(model, {-1, +1});
+        test_vector(model, {+1, -1});
+        test_vector(model, {+1, +1});
+
         svm_free_and_destroy_model(&model);
     }
 
@@ -58,6 +112,7 @@ svm_parameter* create_training_param() {
     param->eps = 1e-3;
     param->shrinking = 1;
     param->probability = 0;
+    param->nu = 0.5;
 
     return param;
 }
@@ -81,9 +136,11 @@ struct svm_problem* read_problem(const char *path) {
     printf("Last character: %d\n", buf[length - 1]);
 
     int record_length = get_record_length(buf);
-    int sparse_length = get_sparse_length(buf, record_length);
     long record_count = length / (2 * record_length);
     cout << "Record count: " << record_count << endl;
+
+    int sparse_length = (int)record_count * record_length; // get_sparse_length(buf, record_length);
+    cout << "Sparse count: " << sparse_length << endl;
 
     struct svm_problem *problem = create_problem((int)record_count);
     struct svm_node* record_values = malloc_array(struct svm_node, sparse_length);
@@ -94,17 +151,23 @@ struct svm_problem* read_problem(const char *path) {
         if (*c == ' ')
             continue;
 
-        if (*c == '1' && field_index < record_length - 1) {
-            record_values[sparse_value_index].index = field_index;
-            cout << sparse_value_index << ": Adding sparse value 1 at index " << record_values[sparse_value_index].index << endl;
-            record_values[sparse_value_index].value = 1;
-            sparse_value_index++;
-        }
+//        if (*c == '1' && field_index < record_length - 1) {
+//            record_values[sparse_value_index].index = field_index;
+//            cout << sparse_value_index << ": Adding sparse value 1 at index " << record_values[sparse_value_index].index << endl;
+//            record_values[sparse_value_index].value = 1;
+//            sparse_value_index++;
+//        }
 
         if (*c == '1' || *c == '0') {
+            if (field_index == record_length - 1)
+                problem->y[record_index] = (*c == '1' ? 1 : -1);
+            else {
+                record_values[sparse_value_index].value = (*c == '1' ? 1 : -1);
+                record_values[sparse_value_index].index = field_index;
+                cout << sparse_value_index << ": Adding sparse value " << record_values[sparse_value_index].value << " at index " << record_values[sparse_value_index].index << endl;
+                sparse_value_index++;
+            }
             field_index++;
-            if (field_index == record_length)
-                problem->y[record_index] = *c - '0';
         }
         
         if (*c == '\n' || *c == 0) {
@@ -137,10 +200,9 @@ struct svm_problem* read_problem(const char *path) {
 
     cout << "X: ";
     for (int i = 0; i < record_count; i++) {
-        int j = 0;
-        do {
+        for (int j = 0; problem->x[i][j].index != -1; j++) {
             cout << "(" << problem->x[i][j].index << ", " << problem->x[i][j].value << ") ";
-        } while(problem->x[i][j++].index == -1);
+        }
         cout << endl;
     }
     cout << endl;
