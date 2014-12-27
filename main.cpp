@@ -68,10 +68,20 @@ ostream& operator <<(ostream& stream, svm_node* sparse_arr) {
     return stream;
 }
 
+ostream& operator <<(ostream& stream, initializer_list<double> list) {
+    for (double v : list) {
+        if (v >= 0)
+            stream << " ";
+        
+        stream << v << " ";
+    }
+    return stream;
+}
+
 void test_vector(svm_model *model, initializer_list<double> dense_arr) {
     struct svm_node *test_vector;
     test_vector = sparsify(dense_arr);
-    cout << test_vector << " -> " << svm_predict(model, test_vector) << "\n";
+    cout << dense_arr << "-> " << svm_predict(model, test_vector) << "\n";
     free(test_vector);
 }
 
